@@ -51,6 +51,41 @@
 var Results_ID = "1UhJ2_ohPjlrNULgJyl6ljTK9foeRBuXaw2-fgkvAGKs";
 
 // =============================================================================
+// TEST MODE CONFIGURATION
+// =============================================================================
+// When a tester (someone in TESTER_EMAILS) submits this form, all emails will
+// be redirected to TEST_REDIRECT_TO. This allows testing without disrupting
+// normal system operation.
+// =============================================================================
+
+/** List of email addresses that trigger test mode when they submit */
+var TESTER_EMAILS = [
+  "simyang@g.hmc.edu",
+  "sojayaweera@g.hmc.edu"
+];
+
+/** Where to redirect emails when a tester submits */
+var TEST_REDIRECT_TO = "simyang@g.hmc.edu, sojayaweera@g.hmc.edu";
+
+/** Flag set during processing - do not modify directly */
+var isTestMode = false;
+
+/**
+ * Returns the appropriate email recipient based on whether this is a test submission.
+ * In test mode (submitted by a tester), emails go to TEST_REDIRECT_TO.
+ *
+ * @param {string} productionEmail - The email to use in production mode
+ * @returns {string} TEST_REDIRECT_TO if isTestMode is true, otherwise productionEmail
+ */
+function getEmailRecipient(productionEmail) {
+  if (isTestMode) {
+    Logger.log("[TEST MODE] Redirecting email from " + productionEmail + " to " + TEST_REDIRECT_TO);
+    return TEST_REDIRECT_TO;
+  }
+  return productionEmail;
+}
+
+// =============================================================================
 // MAIN FORM SUBMISSION HANDLER
 // =============================================================================
 
@@ -70,6 +105,15 @@ function onSubmit(e) {
   var form = FormApp.getActiveForm();
   var responses = form.getResponses();
   var response = responses[responses.length - 1];
+
+  // Check if this is a test submission (submitter is in TESTER_EMAILS list)
+  var submitterEmail = response.getRespondentEmail();
+  isTestMode = TESTER_EMAILS.indexOf(submitterEmail) > -1;
+
+  if (isTestMode) {
+    Logger.log("[TEST MODE] Validity form submitted by tester: " + submitterEmail);
+    Logger.log("[TEST MODE] All emails will be redirected to: " + TEST_REDIRECT_TO);
+  }
 
   // Get the original complaint timestamp (pre-filled in the form)
   var timestamp = Utilities.formatDate(
@@ -154,13 +198,14 @@ function notifyOtherDorms(dorms_list, respondingDorm, source) {
     for (var i = 0; i < emailsSheet.getLastRow(); i++) {
       if (values[i][0] != "" && values[i][0] == current) {
         // Send notification to this dorm's email list
+        var recipient = getEmailRecipient(values[i][1]);
         MailApp.sendEmail({
-          to: values[i][1],
-          subject: "Noise Complaint has been responded to",
+          to: recipient,
+          subject: (isTestMode ? "[TEST] " : "") + "Noise Complaint has been responded to",
           body: respondingDorm + " has responded to the noise complaint from " + source,
           noReply: true
         });
-        Logger.log("Notified " + current + " at " + values[i][1]);
+        Logger.log("Notified " + current + " at " + recipient);
       }
     }
 
@@ -180,13 +225,14 @@ function notifyOtherDorms(dorms_list, respondingDorm, source) {
  * @param {string} comment - The dorm's response comment
  */
 function sendValidResponse(email, dorm, comment) {
+  var recipient = getEmailRecipient(email);
   MailApp.sendEmail({
-    to: email,
-    subject: "Response to your submitted noise complaint",
+    to: recipient,
+    subject: (isTestMode ? "[TEST] " : "") + "Response to your submitted noise complaint",
     body: "Response from " + dorm + ":\n\n" + comment,
     noReply: true
   });
-  Logger.log("Sent valid response to complainant: " + email);
+  Logger.log("Sent valid response to: " + recipient);
 }
 
 /**
@@ -197,14 +243,15 @@ function sendValidResponse(email, dorm, comment) {
  * @param {string} reason - The reason the complaint was marked invalid
  */
 function sendInvalidResponse(email, dorm, reason) {
+  var recipient = getEmailRecipient(email);
   MailApp.sendEmail({
-    to: email,
-    subject: "Response to your submitted noise complaint",
+    to: recipient,
+    subject: (isTestMode ? "[TEST] " : "") + "Response to your submitted noise complaint",
     body: "The respondents to your noise complaint (" + dorm +
           ") have responded that it's invalid for the following reason:\n\n" + reason,
     noReply: true
   });
-  Logger.log("Sent invalid response to complainant: " + email);
+  Logger.log("Sent invalid response to: " + recipient);
 }
 
 // =============================================================================

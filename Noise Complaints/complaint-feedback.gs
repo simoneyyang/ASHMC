@@ -47,6 +47,41 @@ var Results_ID = "1UhJ2_ohPjlrNULgJyl6ljTK9foeRBuXaw2-fgkvAGKs";
 var ashmc_email = "ashmc@g.hmc.edu";
 
 // =============================================================================
+// TEST MODE CONFIGURATION
+// =============================================================================
+// When a tester (someone in TESTER_EMAILS) submits this form, all emails will
+// be redirected to TEST_REDIRECT_TO. This allows testing without disrupting
+// normal system operation.
+// =============================================================================
+
+/** List of email addresses that trigger test mode when they submit */
+var TESTER_EMAILS = [
+  "simyang@g.hmc.edu",
+  "sojayaweera@g.hmc.edu"
+];
+
+/** Where to redirect emails when a tester submits */
+var TEST_REDIRECT_TO = "simyang@g.hmc.edu, sojayaweera@g.hmc.edu";
+
+/** Flag set during processing - do not modify directly */
+var isTestMode = false;
+
+/**
+ * Returns the appropriate email recipient based on whether this is a test submission.
+ * In test mode (submitted by a tester), emails go to TEST_REDIRECT_TO.
+ *
+ * @param {string} productionEmail - The email to use in production mode
+ * @returns {string} TEST_REDIRECT_TO if isTestMode is true, otherwise productionEmail
+ */
+function getEmailRecipient(productionEmail) {
+  if (isTestMode) {
+    Logger.log("[TEST MODE] Redirecting email from " + productionEmail + " to " + TEST_REDIRECT_TO);
+    return TEST_REDIRECT_TO;
+  }
+  return productionEmail;
+}
+
+// =============================================================================
 // MAIN FORM SUBMISSION HANDLER
 // =============================================================================
 
@@ -65,6 +100,15 @@ function onSubmit(e) {
   var form = FormApp.getActiveForm();
   var responses = form.getResponses();
   var response = responses[responses.length - 1];
+
+  // Check if this is a test submission (submitter is in TESTER_EMAILS list)
+  var submitterEmail = response.getRespondentEmail();
+  isTestMode = TESTER_EMAILS.indexOf(submitterEmail) > -1;
+
+  if (isTestMode) {
+    Logger.log("[TEST MODE] Feedback form submitted by tester: " + submitterEmail);
+    Logger.log("[TEST MODE] All emails will be redirected to: " + TEST_REDIRECT_TO);
+  }
 
   // Get which dorms the complaint was about (checkbox array)
   var noise = response.getGradableItemResponses()[1].getResponse();
@@ -117,11 +161,12 @@ function sendMessageToDorms(dorms, message) {
 
     for (var i = 0; i < emailsSheet.getLastRow(); i++) {
       if (values[i][0] != "" && values[i][0] == dorm) {
-        Logger.log("Sending feedback to: " + values[i][1]);
+        var recipient = getEmailRecipient(values[i][1]);
+        Logger.log("Sending feedback to: " + recipient);
 
         MailApp.sendEmail({
-          to: values[i][1],
-          subject: "Feedback on the noise complaint that you received from complainant",
+          to: recipient,
+          subject: (isTestMode ? "[TEST] " : "") + "Feedback on the noise complaint that you received from complainant",
           body: message,
           noReply: true
         });
@@ -146,12 +191,13 @@ function notifyASHMC(response) {
              "Original Complaint Timestamp: " + timestamp + "\n" +
              "Complainant's Comments: " + (comments || "None provided");
 
+  var recipient = getEmailRecipient(ashmc_email);
   MailApp.sendEmail({
-    to: ashmc_email,
-    subject: "Unaddressed Noise Complaint",
+    to: recipient,
+    subject: (isTestMode ? "[TEST] " : "") + "Unaddressed Noise Complaint",
     body: body,
     noReply: true
   });
 
-  Logger.log("Notified ASHMC about unaddressed complaint");
+  Logger.log("Notified ASHMC at: " + recipient);
 }
