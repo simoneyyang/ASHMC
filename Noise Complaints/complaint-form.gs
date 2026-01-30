@@ -146,9 +146,18 @@ function onSubmit(e) {
   // Send complaint emails to each dorm
   for (var d = 0; d < noise.length; d++) {
     var dorm = noise[d];
+    //dorm = "North";
+    //return;
 
-    // Easter egg (can be removed)
+    //just kidding
+    //ilovefroshchem :)
+
     if (dorm == "East" && complaint.indexOf("I love frosh chem") > -1) {
+      //hi person reading my messy and uncommented scripts
+      //first of all, I'm sorry
+      //secondly, you should definitely delete this part
+      //...how could I make a script without adding some easter eggs...
+      //the other two are much harder to find ;)
       MailApp.sendEmail(ashmc_email, "NOISE COMPLAINT TO EAST: ilovefroshchem-- just a harmless easter egg", "Someone found out..." + complaint, { noReply: true });
     }
 
