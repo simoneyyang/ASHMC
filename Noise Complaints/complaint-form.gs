@@ -57,6 +57,29 @@ var ashmc_email = "ashmc@g.hmc.edu";
 var VALIDITY_CHECK_DELAY_MINUTES = 15;
 
 // =============================================================================
+// TEST MODE CONFIGURATION
+// =============================================================================
+// Add tester email addresses to TESTER_EMAILS array. When a complaint is
+// submitted by someone in this list, ALL emails for that complaint will be
+// redirected to TEST_REDIRECT_TO instead of the real recipients.
+// This allows testing without disrupting normal system operation.
+//
+// To disable test mode entirely, set TESTER_EMAILS to an empty array: []
+// =============================================================================
+
+/** List of email addresses that trigger test mode when they submit a complaint */
+var TESTER_EMAILS = [
+  "simyang@g.hmc.edu",
+  "sojayaweera@g.hmc.edu"
+];
+
+/** Where to redirect emails when a tester submits a complaint */
+var TEST_REDIRECT_TO = "simyang@g.hmc.edu, sojayaweera@g.hmc.edu";
+
+/** Flag set during processing - do not modify directly */
+var isTestMode = false;
+
+// =============================================================================
 // FORM FIELD INDICES - Update these if form questions are reordered
 // =============================================================================
 
@@ -87,6 +110,15 @@ function onSubmit(e) {
   var responses = form.getResponses();
   var response = responses[responses.length - 1];
 
+  // Check if this is a test submission (complainant is in TESTER_EMAILS list)
+  var complainantEmail = response.getRespondentEmail();
+  isTestMode = TESTER_EMAILS.indexOf(complainantEmail) > -1;
+
+  if (isTestMode) {
+    Logger.log("[TEST MODE] Complaint from tester: " + complainantEmail);
+    Logger.log("[TEST MODE] All emails will be redirected to: " + TEST_REDIRECT_TO);
+  }
+
   // Get complaint details from form
   var noise = getResponse(noiseIndex);        // Array of dorm names
   var official = getResponse(officialIndex);  // "Yes" or "No"
@@ -114,9 +146,18 @@ function onSubmit(e) {
   // Send complaint emails to each dorm
   for (var d = 0; d < noise.length; d++) {
     var dorm = noise[d];
+    //dorm = "North";
+    //return;
 
-    // Easter egg (can be removed)
+    //just kidding
+    //ilovefroshchem :)
+
     if (dorm == "East" && complaint.indexOf("I love frosh chem") > -1) {
+      //hi person reading my messy and uncommented scripts
+      //first of all, I'm sorry
+      //secondly, you should definitely delete this part
+      //...how could I make a script without adding some easter eggs...
+      //the other two are much harder to find ;)
       MailApp.sendEmail(ashmc_email, "NOISE COMPLAINT TO EAST: ilovefroshchem-- just a harmless easter egg", "Someone found out..." + complaint, { noReply: true });
     }
 
@@ -173,7 +214,8 @@ function scheduleValidityCheck(timestamp, dorms, complaint, official) {
     timestamp: timestamp.toString(),
     dorms: dorms,
     complaint: complaint,
-    official: official
+    official: official,
+    isTest: isTestMode  // Store test mode flag so delayed check uses it too
   };
 
   // Use timestamp as unique key for this complaint
@@ -218,6 +260,13 @@ function checkValidityResponse() {
       var dorms = complaintData.dorms;
       var complaint = complaintData.complaint;
       var official = complaintData.official;
+
+      // Restore test mode flag from stored data
+      isTestMode = complaintData.isTest || false;
+
+      if (isTestMode) {
+        Logger.log("[TEST MODE] Processing delayed check for test complaint");
+      }
 
       Logger.log("Checking validity response for complaint from: " + complaintTimestamp);
 
@@ -291,7 +340,8 @@ function sendNoResponseNotification(timestamp, dorms, complaint, official) {
   var dormsList = Array.isArray(dorms) ? dorms.join(", ") : dorms;
   var complaintType = (official === "Yes") ? "Official" : "Unofficial";
 
-  var subject = "ALERT: No Response to Noise Complaint (" + complaintType + ")";
+  var recipient = getEmailRecipient(ashmc_email);
+  var subject = (isTestMode ? "[TEST] " : "") + "ALERT: No Response to Noise Complaint (" + complaintType + ")";
 
   var body = "A noise complaint was submitted " + VALIDITY_CHECK_DELAY_MINUTES + " minutes ago, " +
              "but no validity form response has been received.\n\n" +
@@ -304,13 +354,13 @@ function sendNoResponseNotification(timestamp, dorms, complaint, official) {
              "Please follow up with the dorm(s) to ensure the complaint is being addressed.";
 
   MailApp.sendEmail({
-    to: ashmc_email,
+    to: recipient,
     subject: subject,
     body: body,
     noReply: true
   });
 
-  Logger.log("No-response notification sent to: " + ashmc_email);
+  Logger.log("No-response notification sent to: " + recipient);
 }
 
 /**
@@ -374,6 +424,21 @@ function cleanupAllPendingChecks() {
 // =============================================================================
 
 /**
+ * Returns the appropriate email recipient based on whether this is a test submission.
+ * In test mode (complaint from a tester), emails go to TEST_REDIRECT_TO.
+ *
+ * @param {string} productionEmail - The email to use in production mode
+ * @returns {string} TEST_REDIRECT_TO if isTestMode is true, otherwise productionEmail
+ */
+function getEmailRecipient(productionEmail) {
+  if (isTestMode) {
+    Logger.log("[TEST MODE] Redirecting email from " + productionEmail + " to " + TEST_REDIRECT_TO);
+    return TEST_REDIRECT_TO;
+  }
+  return productionEmail;
+}
+
+/**
  * Sends an official complaint email to a dorm's email list.
  * Uses the "Complaint Email" HTML template.
  *
@@ -396,17 +461,18 @@ function sendEmail(complaint, dorm, time, list, url) {
 
   var message = template.evaluate();
 
-  var subject = "Official Noise Complaint for " + dorm;
+  var recipient = getEmailRecipient(list);
+  var subject = (isTestMode ? "[TEST] " : "") + "Official Noise Complaint for " + dorm;
 
   MailApp.sendEmail({
-    to: list,
+    to: recipient,
     name: "Noise Complaint",
     subject: subject,
     htmlBody: message.getContent(),
     noReply: true
   });
 
-  Logger.log("Official complaint email sent to: " + list);
+  Logger.log("Official complaint email sent to: " + recipient);
 }
 
 /**
@@ -432,17 +498,18 @@ function sendUnofficialEmail(complaint, dorm, time, list, url) {
 
   var message = template.evaluate();
 
-  var subject = "Unofficial Noise Complaint for " + dorm;
+  var recipient = getEmailRecipient(list);
+  var subject = (isTestMode ? "[TEST] " : "") + "Unofficial Noise Complaint for " + dorm;
 
   MailApp.sendEmail({
-    to: list,
+    to: recipient,
     name: "Noise Complaint",
     subject: subject,
     htmlBody: message.getContent(),
     noReply: true
   });
 
-  Logger.log("Unofficial complaint email sent to: " + list);
+  Logger.log("Unofficial complaint email sent to: " + recipient);
 }
 
 /**
@@ -458,17 +525,18 @@ function sendFeedbackEmail(email, url) {
 
   var message = template.evaluate();
 
-  var subject = "Noise Complaint: Evaluate response to your complaint";
+  var recipient = getEmailRecipient(email);
+  var subject = (isTestMode ? "[TEST] " : "") + "Noise Complaint: Evaluate response to your complaint";
 
   MailApp.sendEmail({
-    to: email,
+    to: recipient,
     name: "Noise Complaint",
     subject: subject,
     htmlBody: message.getContent(),
     noReply: true
   });
 
-  Logger.log("Feedback email sent to: " + email);
+  Logger.log("Feedback email sent to: " + recipient);
 }
 
 // =============================================================================
